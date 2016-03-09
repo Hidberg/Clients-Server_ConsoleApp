@@ -81,7 +81,7 @@ int checkFileSend(char *messageToSend)
 	}
 }
 
-int sendFile(unsigned char *messageWithPath, SOCKET serverSock)
+int sendFile(char *messageWithPath, SOCKET serverSock)
 {
 	char *pathFile = (char*)(messageWithPath + 2);
 	FILE *fileForSend;
@@ -107,8 +107,10 @@ int sendFile(unsigned char *messageWithPath, SOCKET serverSock)
 	fseek(fileForSend, 0L, SEEK_END);
 	sizeofFile = ftell(fileForSend);
 	fseek(fileForSend, 0L, SEEK_SET);
+	char strSizeofFile[11];
+	sprintf(strSizeofFile, "%ld\0", sizeofFile);
 
-	if (send(serverSock, (char*)sizeofFile, 5, 0) < 0)
+	if (send(serverSock, strSizeofFile, 11, 0) < 0)
 	{
 		puts("Не удается связаться с сервером.");
 		fclose(fileForSend);
@@ -117,7 +119,7 @@ int sendFile(unsigned char *messageWithPath, SOCKET serverSock)
 
 	char *dataForSend = (char*)malloc(sizeofFile * sizeof(char));
 	fread(dataForSend, sizeofFile, 1, fileForSend);
-	if (send(serverSock, dataForSend, strlen(dataForSend), 0) < 0)
+	if (send(serverSock, dataForSend, sizeofFile, 0) < 0)
 	{
 		puts("Передача файла прервалась, возможно прервался connection.");
 		free(dataForSend);
@@ -126,7 +128,6 @@ int sendFile(unsigned char *messageWithPath, SOCKET serverSock)
 	}
 	free(dataForSend);
 	puts("Файл отправлен.");
-	free(dataForSend);
 	fclose(fileForSend);
 	return 0;
 }
@@ -174,12 +175,12 @@ int clientWork()
 		return 1;
 	}
 	puts("Connected");
-	unsigned char *message = (unsigned char*)calloc(499, sizeof(unsigned char));
+	char *message = (char*)calloc(499, sizeof(char));
 
 	//Send some data
-	while (gets((char*)message))
+	while (gets(message))
 	{
-		if (checkFileSend((char*)message) == 0)
+		if (checkFileSend(message) == 0)
 		{
 			if (sendFile(message, s) == 0)
 			{
@@ -188,7 +189,7 @@ int clientWork()
 		}
 		else
 		{
-			if (send(s, (char*)message, strlen((char*)message), 0) < 0)
+			if (send(s, message, strlen(message), 0) < 0)
 			{
 				puts("Send failed");
 				free(message);

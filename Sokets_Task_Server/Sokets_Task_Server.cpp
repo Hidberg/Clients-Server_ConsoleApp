@@ -23,24 +23,19 @@ int saveReceivedFile(SOCKET s)
 	}
 	fileForSaveData = fopen(fname, "w");
 	free(fname);
-	//unsigned char *server_reply = (unsigned char*)calloc(500, sizeof(unsigned char));
-	unsigned char *fileLen = (unsigned char*)calloc(4, sizeof(unsigned char));
+	char *strFileLen = (char*)calloc(11, sizeof(char));
 	int temp;
-	if ((temp = recv(s, (char*)fileLen, 5, 0)) != SOCKET_ERROR && temp != 0)
+	if ((temp = recv(s, strFileLen, 11, 0)) != SOCKET_ERROR && temp != 0)
 	{
-		char *fileData = (char*)malloc(atol((char*)fileLen)*sizeof(char));
-		recv(s, fileData, atol((char*)fileLen), 0);
-		fwrite(fileData, sizeof(unsigned char), atol((char*)fileLen), fileForSaveData);
+		long fileLen = atol(strFileLen);
+		char *fileData = (char*)malloc((fileLen+1)*sizeof(char));
+		recv(s, fileData, fileLen, 0);
+		fileData[fileLen] = '\0';
+		fwrite(fileData, sizeof(char), fileLen+1, fileForSaveData);
 		free(fileData);
-		/*if (temp < 499)
-		{
-			break; // Так мы узнаем что записываем последние данные передаваемого файла.
-		}*/
-		//free(server_reply);
-		//server_reply = (unsigned char*)calloc(500, sizeof(unsigned char));
 	}
 	puts("Файл успешно сохранен.");
-	free(fileLen);
+	free(strFileLen);
 	fclose(fileForSaveData);
 	return 0;
 }
@@ -51,7 +46,7 @@ int serverWork()
 	SOCKET s, new_socket;
 	struct sockaddr_in server, client;
 	int c;
-	unsigned char *server_reply;
+	char *msgFromClient;
 	int recv_size;
 
 	printf("\nInitialising Winsock...");
@@ -100,10 +95,10 @@ int serverWork()
 				puts("Connection lost.\nWaiting for incoming connections...");
 				break;
 			}
-			server_reply = (unsigned char*)calloc(500, sizeof(unsigned char));
-			if ((recv_size = recv(new_socket, (char*)server_reply, 499, 0)) != SOCKET_ERROR)
+			msgFromClient = (char*)calloc(500, sizeof(char));
+			if ((recv_size = recv(new_socket, (char*)msgFromClient, 499, 0)) != SOCKET_ERROR)
 			{
-				if ((server_reply[0]) == 'f' && (server_reply[1]) == '1' && (server_reply[2]) == '3' && (server_reply[3]) == '3' && (server_reply[4]) == '7')
+				if ((msgFromClient[0]) == 'f' && (msgFromClient[1]) == '1' && (msgFromClient[2]) == '3' && (msgFromClient[3]) == '3' && (msgFromClient[4]) == '7')
 				{
 					saveReceivedFile(new_socket);
 				}
@@ -111,11 +106,11 @@ int serverWork()
 				{
 					puts("Message received:");
 					//Add a NULL terminating character to make it a proper string before printing
-					server_reply[recv_size] = '\0';
-					puts((char*)server_reply);
+					msgFromClient[recv_size] = '\0';
+					puts((char*)msgFromClient);
 				}
 			}
-			free(server_reply);
+			free(msgFromClient);
 		}
 	}
 

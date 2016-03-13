@@ -8,6 +8,9 @@
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
+const int headerSize = 5;
+typedef enum {textMsg, fileMsg} msg_type;
+
 int loadInfoFromConfig(struct sockaddr_in *server)
 {
 	int status = 0;
@@ -83,11 +86,11 @@ int checkFileSend(char *messageToSend)
 
 int sendFile(char *messageWithPath, SOCKET serverSock)
 {
-	char *pathFile = (char*)(messageWithPath + 2);
+	char *pathFile = (messageWithPath + 2);
 	FILE *fileForSend;
-	if (fopen(pathFile, "r") != NULL)
+	if (fopen(pathFile, "rb") != NULL)
 	{
-		fileForSend = fopen(pathFile, "r");
+		fileForSend = fopen(pathFile, "rb");
 	}
 	else
 	{
@@ -95,31 +98,21 @@ int sendFile(char *messageWithPath, SOCKET serverSock)
 		return -1;
 	}
 
-	if (send(serverSock, "f1337", 5, 0) < 0)
-	{
-		puts("Не удается связаться с сервером.");
-		fclose(fileForSend);
-		return -1;
-	}
-
 	long sizeofFile;
 	// Определяем размер файла.
-	fseek(fileForSend, 0L, SEEK_END);
+	fseek(fileForSend, 0, SEEK_END);
 	sizeofFile = ftell(fileForSend);
-	fseek(fileForSend, 0L, SEEK_SET);
-	char strSizeofFile[11];
-	sprintf(strSizeofFile, "%ld\0", sizeofFile);
+	fseek(fileForSend, 0, SEEK_SET);
+	char *p = (char*)&sizeofFile;
 
-	if (send(serverSock, strSizeofFile, 11, 0) < 0)
+	char *dataForSend = (char*)malloc((headerSize + sizeofFile) * sizeof(char));
+	dataForSend[0] = fileMsg;
+	for (int i = 0; i < 4; ++i)
 	{
-		puts("Не удается связаться с сервером.");
-		fclose(fileForSend);
-		return -1;
+		dataForSend[1 + i] = *(p+i);
 	}
-
-	char *dataForSend = (char*)malloc(sizeofFile * sizeof(char));
-	fread(dataForSend, sizeofFile, 1, fileForSend);
-	if (send(serverSock, dataForSend, sizeofFile, 0) < 0)
+	int temp = fread((dataForSend + headerSize), 1, sizeofFile, fileForSend);
+	if (send(serverSock, dataForSend, headerSize + sizeofFile, 0) < 0)
 	{
 		puts("Передача файла прервалась, возможно прервался connection.");
 		free(dataForSend);
@@ -178,18 +171,26 @@ int clientWork()
 	char *message = (char*)calloc(499, sizeof(char));
 
 	//Send some data
-	while (gets(message))
+	while (gets(message+headerSize))
 	{
-		if (checkFileSend(message) == 0)
+		char *temp = message+headerSize;
+		if (checkFileSend(temp) == 0)
 		{
-			if (sendFile(message, s) == 0)
+			if (sendFile(temp, s) == 0)
 			{
 				; // Нужно сделать проверку соединения иначе при потере connection программа завершится.
 			}
 		}
 		else
 		{
-			if (send(s, message, strlen(message), 0) < 0)
+			int sizeofMessage = strlen(temp);
+			message[0] = textMsg;
+			char *p = (char*)&(sizeofMessage);
+			for (int i = 0; i < 4; ++i)
+			{
+				message[1 + i] = *(p + i);
+			}
+			if (send(s, message, sizeofMessage + headerSize, 0) < 0)
 			{
 				puts("Send failed");
 				free(message);
@@ -197,10 +198,14 @@ int clientWork()
 			}
 			puts("Data Send");
 		}
+		// Обнуление строки message.
+		for (int i = 0; i < 499; ++i)
+		{
+			message[i] = 0;
+		}
 	}
 	closesocket(s);
 	WSACleanup();
-	free(message);
 	return 0;
 }
 

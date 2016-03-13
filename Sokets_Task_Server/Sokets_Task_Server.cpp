@@ -8,34 +8,42 @@
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
-int saveReceivedFile(SOCKET s)
+typedef enum { textMsg, fileMsg } msg_type;
+
+int saveReceivedFile(SOCKET s, char *msgFromClient)
 {
 	char *fname = (char*)calloc(500, sizeof(char));
 	FILE *fileForSaveData;
 	puts("Куда сохранить пересылаемый файл? Введите путь.");
 	gets(fname);
-	while (fopen(fname, "w") == NULL)
+	while (fopen(fname, "wb") == NULL)
 	{
 		puts("Путь введен неверно или туда невозможно сохранить файл, введите ещё раз.");
 		free(fname);
 		fname = (char*)calloc(500, sizeof(char));
 		gets(fname);
 	}
-	fileForSaveData = fopen(fname, "w");
+	fileForSaveData = fopen(fname, "wb");
 	free(fname);
-	char *strFileLen = (char*)calloc(11, sizeof(char));
-	int temp;
-	if ((temp = recv(s, strFileLen, 11, 0)) != SOCKET_ERROR && temp != 0)
+	char *receivedDataSize_str = (char*)calloc(4, sizeof(char));
+	for (int i = 1; i < 5; ++i)
 	{
-		long fileLen = atol(strFileLen);
-		char *fileData = (char*)malloc((fileLen+1)*sizeof(char));
-		recv(s, fileData, fileLen, 0);
-		fileData[fileLen] = '\0';
-		fwrite(fileData, sizeof(char), fileLen+1, fileForSaveData);
-		free(fileData);
+		receivedDataSize_str[i - 1] = msgFromClient[i];
 	}
-	puts("Файл успешно сохранен.");
-	free(strFileLen);
+	int receivedDataSize = *((int*)receivedDataSize_str);
+	free(receivedDataSize_str);
+	int temp;
+	char *fileData = (char*)malloc(receivedDataSize*sizeof(char));
+	if ((temp = recv(s, fileData, receivedDataSize, 0)) != SOCKET_ERROR && temp != 0)
+	{
+		fwrite(fileData, sizeof(char), receivedDataSize, fileForSaveData);
+		puts("Файл успешно сохранен.");
+	}
+	else
+	{
+		puts("Файл не сохранен!");
+	}
+	free(fileData);
 	fclose(fileForSaveData);
 	return 0;
 }
@@ -95,19 +103,26 @@ int serverWork()
 				puts("Connection lost.\nWaiting for incoming connections...");
 				break;
 			}
-			msgFromClient = (char*)calloc(500, sizeof(char));
-			if ((recv_size = recv(new_socket, (char*)msgFromClient, 499, 0)) != SOCKET_ERROR)
+			msgFromClient = (char*)malloc(5 * sizeof(char));
+			if ((recv_size = recv(new_socket, msgFromClient, 5, 0)) != SOCKET_ERROR)
 			{
-				if ((msgFromClient[0]) == 'f' && (msgFromClient[1]) == '1' && (msgFromClient[2]) == '3' && (msgFromClient[3]) == '3' && (msgFromClient[4]) == '7')
+				if ((msgFromClient[0]) == fileMsg)
 				{
-					saveReceivedFile(new_socket);
+					saveReceivedFile(new_socket, msgFromClient); // msgFromClient parametr for sizeDataFile
 				}
-				else
+				else if ((msgFromClient[0]) == textMsg)
 				{
-					puts("Message received:");
-					//Add a NULL terminating character to make it a proper string before printing
-					msgFromClient[recv_size] = '\0';
-					puts((char*)msgFromClient);
+					int receivedDataSize = *((int*)(msgFromClient+1));
+					char *textMsg = (char*)malloc((receivedDataSize+1)*sizeof(char));
+					int temp = 0;
+					temp = recv(new_socket, textMsg, receivedDataSize, 0);
+					if (temp != SOCKET_ERROR && temp != 0)
+					{
+						puts("Message received:");
+						textMsg[temp] = '\0';
+						puts(textMsg);
+					}
+					free(textMsg);
 				}
 			}
 			free(msgFromClient);

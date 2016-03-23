@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Sokets_Test3", "Sokets_Test
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Sokets_Test4", "Sokets_Test4\Sokets_Test4.vcxproj", "{8C384419-1AB0-4FC0-B964-26E3FEF2E2BE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ConsoleApp1", "ConsoleApp1\ConsoleApp1.vcxproj", "{6A4EC8DB-0ED6-41C2-BB91-A3BB0098397D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -39,6 +41,10 @@ Global
 		{8C384419-1AB0-4FC0-B964-26E3FEF2E2BE}.Debug|Win32.Build.0 = Debug|Win32
 		{8C384419-1AB0-4FC0-B964-26E3FEF2E2BE}.Release|Win32.ActiveCfg = Release|Win32
 		{8C384419-1AB0-4FC0-B964-26E3FEF2E2BE}.Release|Win32.Build.0 = Release|Win32
+		{6A4EC8DB-0ED6-41C2-BB91-A3BB0098397D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6A4EC8DB-0ED6-41C2-BB91-A3BB0098397D}.Debug|Win32.Build.0 = Debug|Win32
+		{6A4EC8DB-0ED6-41C2-BB91-A3BB0098397D}.Release|Win32.ActiveCfg = Release|Win32
+		{6A4EC8DB-0ED6-41C2-BB91-A3BB0098397D}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

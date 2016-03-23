@@ -12,37 +12,32 @@ typedef enum { textMsg, fileMsg } msg_type;
 
 int saveReceivedFile(SOCKET s, char *msgFromClient)
 {
-	char *fname = (char*)calloc(500, sizeof(char));
+	char *fname = (char*)malloc(500 * sizeof(char));
 	FILE *fileForSaveData;
 	puts("Куда сохранить пересылаемый файл? Введите путь.");
 	gets(fname);
 	while (fopen(fname, "wb") == NULL)
 	{
 		puts("Путь введен неверно или туда невозможно сохранить файл, введите ещё раз.");
-		free(fname);
-		fname = (char*)calloc(500, sizeof(char));
 		gets(fname);
 	}
 	fileForSaveData = fopen(fname, "wb");
 	free(fname);
-	char *receivedDataSize_str = (char*)calloc(4, sizeof(char));
+	char *comingDataSize_str = (char*)malloc(4 * sizeof(char));
 	for (int i = 1; i < 5; ++i)
 	{
-		receivedDataSize_str[i - 1] = msgFromClient[i];
+		comingDataSize_str[i - 1] = msgFromClient[i];
 	}
-	int receivedDataSize = *((int*)receivedDataSize_str);
-	free(receivedDataSize_str);
-	int temp;
-	char *fileData = (char*)malloc(receivedDataSize*sizeof(char));
-	if ((temp = recv(s, fileData, receivedDataSize, 0)) != SOCKET_ERROR && temp != 0)
+	int comingDataSize = *((int*)comingDataSize_str);
+	free(comingDataSize_str);
+	int recv_size = 0, comingDataSize_copy = comingDataSize;
+	char *fileData = (char*)malloc(comingDataSize*sizeof(char));
+	while (comingDataSize_copy != 0 && (recv_size = recv(s, fileData + recv_size, comingDataSize_copy, 0)) != 0 && recv_size != SOCKET_ERROR)
 	{
-		fwrite(fileData, sizeof(char), receivedDataSize, fileForSaveData);
-		puts("Файл успешно сохранен.");
+		comingDataSize_copy -= recv_size;
 	}
-	else
-	{
-		puts("Файл не сохранен!");
-	}
+	fwrite(fileData, sizeof(char), comingDataSize, fileForSaveData);
+	printf("Файл успешно сохранен.	%i	%i\n", comingDataSize, comingDataSize_copy);
 	free(fileData);
 	fclose(fileForSaveData);
 	return 0;
@@ -53,10 +48,15 @@ int serverWork()
 	WSADATA wsa;
 	SOCKET s, new_socket;
 	struct sockaddr_in server, client;
-	int c;
 	char *msgFromClient;
-	int recv_size;
+	fd_set readfds, copy_set;
 
+	int max_clients = 3, client_socket[3];
+	//initialise all client_socket[] to 0 so not checked
+	for (int i = 0; i < max_clients; ++i)
+	{
+		client_socket[i] = 0;
+	}
 	printf("\nInitialising Winsock...");
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
@@ -86,49 +86,101 @@ int serverWork()
 	puts("Bind done");
 
 	//Listen to incoming connections
-	listen(s, 1);
+	listen(s, 3);
 
-	//Accept and incoming connection
 	puts("Waiting for incoming connections...");
 
-	c = sizeof(struct sockaddr_in);
+	int addrlen;
+	addrlen = sizeof(struct sockaddr_in);
+	int max_sd, sd, activity;
+	FD_ZERO(&readfds);
+	FD_ZERO(&copy_set);
+	FD_SET(s, &readfds);
+	max_sd = s;
 
-	while ((new_socket = accept(s, (struct sockaddr *)&client, &c)) != INVALID_SOCKET)
+	while (TRUE)
 	{
-		puts("Connection accepted");
-		while (true)
+		copy_set = readfds;
+		//wait for an activity on one of the sockets , timeout is NULL , so wait indefinitely
+		activity = select(max_sd + 1, &copy_set, NULL, NULL, NULL);
+
+		if (activity < 0)
 		{
-			if (send(new_socket, "check", 5, 0) < 0)
+			printf("select error");
+		}
+		//If something happened on the master socket , then its an incoming connection
+		if (FD_ISSET(s, &copy_set))
+		{
+			if ((new_socket = accept(s, (struct sockaddr *)&server, &addrlen)) < 0)
 			{
-				puts("Connection lost.\nWaiting for incoming connections...");
-				break;
+				perror("accept");
+				exit(EXIT_FAILURE);
 			}
-			msgFromClient = (char*)malloc(5 * sizeof(char));
-			if ((recv_size = recv(new_socket, msgFromClient, 5, 0)) != SOCKET_ERROR)
+
+			//inform user of socket number - used in send and receive commands
+			printf("New connection , socket fd is %d , ip is : %s , port : %d \n", new_socket, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+
+			//add new socket to array of sockets
+			for (int i = 0; i < max_clients; i++)
 			{
-				if ((msgFromClient[0]) == fileMsg)
+				//if position is empty
+				if (client_socket[i] == 0)
 				{
-					saveReceivedFile(new_socket, msgFromClient); // msgFromClient parametr for sizeDataFile
+					client_socket[i] = new_socket;
+					if (new_socket > max_sd) max_sd = new_socket;
+					FD_SET(new_socket, &readfds);
+					printf("Adding to list of sockets as %d\n", i);
+					break;
 				}
-				else if ((msgFromClient[0]) == textMsg)
+			}
+		}
+		else
+		{
+			//else its some IO operation on some other socket :)
+			for (int i = 0; i < max_clients; ++i)
+			{
+				sd = client_socket[i];
+
+				if (FD_ISSET(sd, &copy_set))
 				{
-					int receivedDataSize = *((int*)(msgFromClient+1));
-					char *textMsg = (char*)malloc((receivedDataSize+1)*sizeof(char));
-					int temp = 0;
-					temp = recv(new_socket, textMsg, receivedDataSize, 0);
-					if (temp != SOCKET_ERROR && temp != 0)
+					msgFromClient = (char*)malloc(5 * sizeof(char));
+					int recv_size = 0;
+					if ((recv_size = recv(sd, msgFromClient, 5, 0)) != SOCKET_ERROR && recv_size != 0)
 					{
-						puts("Message received:");
-						textMsg[temp] = '\0';
-						puts(textMsg);
+						if ((msgFromClient[0]) == fileMsg)
+						{
+							saveReceivedFile(sd, msgFromClient); // msgFromClient parametr in order to know sizeDataFile
+						}
+						else if ((msgFromClient[0]) == textMsg)
+						{
+							int comingDataSize = *((int*)(msgFromClient + 1));
+							char *textMsg = (char*)malloc((comingDataSize + 1)*sizeof(char));
+							recv_size = 0;
+							recv_size = recv(sd, textMsg, comingDataSize, 0);
+							if (recv_size != SOCKET_ERROR && recv_size != 0)
+							{
+								puts("Message received:");
+								textMsg[recv_size] = '\0';
+								puts(textMsg);
+							}
+							free(textMsg);
+						}
+					} 
+					else
+					{
+						//Somebody disconnected , get his details and print
+						getpeername(sd, (struct sockaddr*)&server, (socklen_t*)&addrlen);
+						printf("Host disconnected , ip %s , port %d \n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+						FD_CLR(sd, &readfds);
+						//Close the socket and mark as 0 in list for reuse
+						closesocket(sd);
+						client_socket[i] = 0;
 					}
-					free(textMsg);
+					free(msgFromClient);
 				}
 			}
-			free(msgFromClient);
 		}
 	}
-
 	closesocket(s);
 	WSACleanup();
 	return 0;

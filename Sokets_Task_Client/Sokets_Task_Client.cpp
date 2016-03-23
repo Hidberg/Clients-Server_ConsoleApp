@@ -19,12 +19,8 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 	char *fname = "config.txt"; 
 	if (_access(fname, 0) != 0)
 	{
-		fname = "D:/Projects on C/Tasks_From_Muxan/Debug/config.txt";
-		if (_access(fname, 0) != 0)
-		{
-			printf("Конфиг должен быть в одной папке с клиентом.\n");
-			status = -1;
-		}
+		printf("Конфиг должен быть в одной папке с клиентом.\n");
+		status = -1;
 	}
 	if (status == 0)
 	{
@@ -50,8 +46,6 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 	}
 	if (status == 0)
 	{
-		free(strFromConfig);
-		strFromConfig = (char*)calloc(17, sizeof(char));
 		if (fgets(strFromConfig, 6, config) != NULL)
 		{
 			int port = atoi(strFromConfig);
@@ -64,7 +58,7 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 			status = -2;
 		}
 	}
-	if (status != 1)
+	if (status != -1)
 	{
 		free(strFromConfig);
 		fclose(config);
@@ -86,8 +80,9 @@ int checkFileSend(char *messageToSend)
 
 int sendFile(char *messageWithPath, SOCKET serverSock)
 {
+	int status = 0;
 	char *pathFile = (messageWithPath + 2);
-	FILE *fileForSend;
+	FILE *fileForSend = NULL;
 	if (fopen(pathFile, "rb") != NULL)
 	{
 		fileForSend = fopen(pathFile, "rb");
@@ -95,7 +90,7 @@ int sendFile(char *messageWithPath, SOCKET serverSock)
 	else
 	{
 		printf("Путь для файла указан неверно или файл не существует.\n");
-		return -1;
+		status = -1;
 	}
 
 	long sizeofFile;
@@ -111,18 +106,19 @@ int sendFile(char *messageWithPath, SOCKET serverSock)
 	{
 		dataForSend[1 + i] = *(p+i);
 	}
-	int temp = fread((dataForSend + headerSize), 1, sizeofFile, fileForSend);
+	fread((dataForSend + headerSize), 1, sizeofFile, fileForSend);
 	if (send(serverSock, dataForSend, headerSize + sizeofFile, 0) < 0)
 	{
 		puts("Передача файла прервалась, возможно прервался connection.");
+		status = -2;
+	}
+	if (status != -1)
+	{
 		free(dataForSend);
 		fclose(fileForSend);
-		return -1;
 	}
-	free(dataForSend);
-	puts("Файл отправлен.");
-	fclose(fileForSend);
-	return 0;
+	if (status == 0) puts("Файл отправлен.");
+	return status;
 }
 
 int clientWork()
@@ -173,35 +169,27 @@ int clientWork()
 	//Send some data
 	while (gets(message+headerSize))
 	{
-		char *temp = message+headerSize;
-		if (checkFileSend(temp) == 0)
+		char *msgToSend = message+headerSize;
+		if (checkFileSend(msgToSend) == 0)
 		{
-			if (sendFile(temp, s) == 0)
-			{
-				; // Нужно сделать проверку соединения иначе при потере connection программа завершится.
-			}
+			sendFile(msgToSend, s);
 		}
 		else
 		{
-			int sizeofMessage = strlen(temp);
+			int sizeOfMsg = strlen(msgToSend);
 			message[0] = textMsg;
-			char *p = (char*)&(sizeofMessage);
+			char *p = (char*)&(sizeOfMsg);
 			for (int i = 0; i < 4; ++i)
 			{
 				message[1 + i] = *(p + i);
 			}
-			if (send(s, message, sizeofMessage + headerSize, 0) < 0)
+			if (send(s, message, sizeOfMsg + headerSize, 0) < 0)
 			{
 				puts("Send failed");
 				free(message);
 				return 1;
 			}
 			puts("Data Send");
-		}
-		// Обнуление строки message.
-		for (int i = 0; i < 499; ++i)
-		{
-			message[i] = 0;
 		}
 	}
 	closesocket(s);

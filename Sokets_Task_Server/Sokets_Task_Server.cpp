@@ -10,9 +10,9 @@
 
 typedef enum { textMsg, fileMsg } msg_type;
 
-int saveReceivedFile(SOCKET s, char *msgFromClient)
+void saveReceivedFile(SOCKET s, char *size_typeFromClient)
 {
-	char *fname = (char*)malloc(500 * sizeof(char));
+	char *fname = (char*)malloc(512 * sizeof(char));
 	FILE *fileForSaveData;
 	puts("Куда сохранить пересылаемый файл? Введите путь.");
 	gets(fname);
@@ -26,7 +26,7 @@ int saveReceivedFile(SOCKET s, char *msgFromClient)
 	char *comingDataSize_str = (char*)malloc(4 * sizeof(char));
 	for (int i = 1; i < 5; ++i)
 	{
-		comingDataSize_str[i - 1] = msgFromClient[i];
+		comingDataSize_str[i - 1] = size_typeFromClient[i];
 	}
 	int comingDataSize = *((int*)comingDataSize_str);
 	free(comingDataSize_str);
@@ -40,18 +40,17 @@ int saveReceivedFile(SOCKET s, char *msgFromClient)
 	printf("Файл успешно сохранен.	%i	%i\n", comingDataSize, comingDataSize_copy);
 	free(fileData);
 	fclose(fileForSaveData);
-	return 0;
 }
 
 int serverWork()
 {
 	WSADATA wsa;
 	SOCKET s, new_socket;
-	struct sockaddr_in server, client;
-	char *msgFromClient;
+	struct sockaddr_in server;
+	char *msgWithType_Size;
 	fd_set readfds, copy_set;
 
-	int max_clients = 3, client_socket[3];
+	int max_clients = 10, client_socket[10];
 	//initialise all client_socket[] to 0 so not checked
 	for (int i = 0; i < max_clients; ++i)
 	{
@@ -121,6 +120,7 @@ int serverWork()
 			printf("New connection , socket fd is %d , ip is : %s , port : %d \n", new_socket, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
 			//add new socket to array of sockets
+			int full = 1;
 			for (int i = 0; i < max_clients; i++)
 			{
 				//if position is empty
@@ -130,8 +130,13 @@ int serverWork()
 					if (new_socket > max_sd) max_sd = new_socket;
 					FD_SET(new_socket, &readfds);
 					printf("Adding to list of sockets as %d\n", i);
+					full = 0;
 					break;
 				}
+			}
+			if (full)
+			{
+				closesocket(new_socket);
 			}
 		}
 		else
@@ -143,26 +148,27 @@ int serverWork()
 
 				if (FD_ISSET(sd, &copy_set))
 				{
-					msgFromClient = (char*)malloc(5 * sizeof(char));
+					msgWithType_Size = (char*)malloc(5 * sizeof(char));
 					int recv_size = 0;
-					if ((recv_size = recv(sd, msgFromClient, 5, 0)) != SOCKET_ERROR && recv_size != 0)
+					if ((recv_size = recv(sd, msgWithType_Size, 5, 0)) != SOCKET_ERROR && recv_size != 0)
 					{
-						if ((msgFromClient[0]) == fileMsg)
+						if ((msgWithType_Size[0]) == fileMsg)
 						{
-							saveReceivedFile(sd, msgFromClient); // msgFromClient parametr in order to know sizeDataFile
+							saveReceivedFile(sd, msgWithType_Size); // msgWithType_Size parametr in order to know sizeDataFile
 						}
-						else if ((msgFromClient[0]) == textMsg)
+						else if ((msgWithType_Size[0]) == textMsg)
 						{
-							int comingDataSize = *((int*)(msgFromClient + 1));
+							int comingDataSize = *((int*)(msgWithType_Size + 1));
 							char *textMsg = (char*)malloc((comingDataSize + 1)*sizeof(char));
 							recv_size = 0;
-							recv_size = recv(sd, textMsg, comingDataSize, 0);
-							if (recv_size != SOCKET_ERROR && recv_size != 0)
+							puts("Message received:");
+							while (comingDataSize != 0 && (recv_size = recv(sd, textMsg, comingDataSize, 0)) != 0 && recv_size != SOCKET_ERROR)
 							{
-								puts("Message received:");
+								comingDataSize -= recv_size;
 								textMsg[recv_size] = '\0';
-								puts(textMsg);
+								printf("%s", textMsg);
 							}
+							printf("\n");
 							free(textMsg);
 						}
 					} 
@@ -176,7 +182,7 @@ int serverWork()
 						closesocket(sd);
 						client_socket[i] = 0;
 					}
-					free(msgFromClient);
+					free(msgWithType_Size);
 				}
 			}
 		}

@@ -19,7 +19,7 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 	char *fname = "config.txt"; 
 	if (_access(fname, 0) != 0)
 	{
-		printf("Конфиг должен быть в одной папке с клиентом.\n");
+		puts("Конфиг должен быть в одной папке с клиентом.");
 		status = -1;
 	}
 	if (status == 0)
@@ -34,13 +34,13 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 			}
 			else
 			{
-				printf("Проверьте правильность написания ip - адреса в конфиге.\n");
+				puts("Проверьте правильность написания ip - адреса в конфиге.");
 				status = -2;
 			}
 		}
 		else
 		{
-			printf("Скорее всего файл с конфигом пустой.\n");
+			puts("Скорее всего файл с конфигом пустой.");
 			status = -2;
 		}
 	}
@@ -54,7 +54,7 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 		}
 		else
 		{
-			printf("Введите номера порта в config для подключения.\n");
+			puts("Введите номера порта в config для подключения.");
 			status = -2;
 		}
 	}
@@ -66,9 +66,9 @@ int loadInfoFromConfig(struct sockaddr_in *server)
 	return status;
 }
 
-int checkFileSend(char *messageToSend)
+int checkFileSend(char *msgToSend)
 {
-	if ((messageToSend[0]) == 'f' && (messageToSend[1]) == ' ')
+	if ((msgToSend[0]) == 'f' && (msgToSend[1]) == ' ')
 	{
 		return 0;
 	}
@@ -78,10 +78,10 @@ int checkFileSend(char *messageToSend)
 	}
 }
 
-int sendFile(char *messageWithPath, SOCKET serverSock)
+int sendFile(char *msgWithPath, SOCKET serverSock)
 {
 	int status = 0;
-	char *pathFile = (messageWithPath + 2);
+	char *pathFile = (msgWithPath + 2);
 	FILE *fileForSend = NULL;
 	if (fopen(pathFile, "rb") != NULL)
 	{
@@ -89,31 +89,30 @@ int sendFile(char *messageWithPath, SOCKET serverSock)
 	}
 	else
 	{
-		printf("Путь для файла указан неверно или файл не существует.\n");
+		puts("Путь для файла указан неверно или файл не существует.");
 		status = -1;
 	}
+	if (status == 0)
+	{
+		long sizeofFile;
+		// Определяем размер файла.
+		fseek(fileForSend, 0, SEEK_END);
+		sizeofFile = ftell(fileForSend);
+		fseek(fileForSend, 0, SEEK_SET);
+		char *p = (char*)&sizeofFile;
 
-	long sizeofFile;
-	// Определяем размер файла.
-	fseek(fileForSend, 0, SEEK_END);
-	sizeofFile = ftell(fileForSend);
-	fseek(fileForSend, 0, SEEK_SET);
-	char *p = (char*)&sizeofFile;
-
-	char *dataForSend = (char*)malloc((headerSize + sizeofFile) * sizeof(char));
-	dataForSend[0] = fileMsg;
-	for (int i = 0; i < 4; ++i)
-	{
-		dataForSend[1 + i] = *(p+i);
-	}
-	fread((dataForSend + headerSize), 1, sizeofFile, fileForSend);
-	if (send(serverSock, dataForSend, headerSize + sizeofFile, 0) < 0)
-	{
-		puts("Передача файла прервалась, возможно прервался connection.");
-		status = -2;
-	}
-	if (status != -1)
-	{
+		char *dataForSend = (char*)malloc((headerSize + sizeofFile) * sizeof(char));
+		dataForSend[0] = fileMsg;
+		for (int i = 0; i < 4; ++i)
+		{
+			dataForSend[1 + i] = *(p + i);
+		}
+		fread((dataForSend + headerSize), 1, sizeofFile, fileForSend);
+		if (send(serverSock, dataForSend, headerSize + sizeofFile, 0) < 0)
+		{
+			puts("Передача файла прервалась, возможно прервался connection.");
+			status = -1;
+		}
 		free(dataForSend);
 		fclose(fileForSend);
 	}
@@ -127,13 +126,13 @@ int clientWork()
 	SOCKET s;
 	struct sockaddr_in server;
 
-	printf("\nInitialising Winsock...");
+	puts("Initialising Winsock...");
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
 		printf("Failed. Error Code : %d", WSAGetLastError());
 		return 1;
 	}
-	printf("Initialised.\n");
+	puts("Initialised.");
 
 	//Create a socket
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET)
@@ -141,17 +140,16 @@ int clientWork()
 		printf("Could not create socket : %d", WSAGetLastError());
 		WSACleanup();
 	}
-	printf("Socket created.\n");
+	puts("Socket created.");
 
-	// Initialise a server parametr 
-	server.sin_addr.s_addr = inet_addr("127.0.0.1"); 
-	server.sin_family = AF_INET;
-	server.sin_port = htons(1111);
-	// There is not meaningful parametrs
+	// Initialise a server parametrs 
+	server.sin_addr.s_addr = NULL; 
+	server.sin_family = NULL;
+	server.sin_port = NULL;
 
 	while (loadInfoFromConfig(&server) != 0)
 	{
-		printf("Исправьте ошибку и введите любой символ для продолжения.\n");
+		puts("Исправьте ошибку и введите любой символ для продолжения.");
 		getchar();
 	}
 
@@ -164,7 +162,7 @@ int clientWork()
 		return 1;
 	}
 	puts("Connected");
-	char *message = (char*)calloc(499, sizeof(char));
+	char *message = (char*)calloc(512, sizeof(char));
 
 	//Send some data
 	while (gets(message+headerSize))

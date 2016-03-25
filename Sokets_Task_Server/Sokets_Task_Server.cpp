@@ -50,12 +50,9 @@ int serverWork()
 	char *msgWithType_Size;
 	fd_set readfds, copy_set;
 
-	int max_clients = 10, client_socket[10];
-	//initialise all client_socket[] to 0 so not checked
-	for (int i = 0; i < max_clients; ++i)
-	{
-		client_socket[i] = 0;
-	}
+	int max_clients = 10;
+	int *client_socket = (int*)calloc(max_clients, sizeof(int));
+	
 	printf("\nInitialising Winsock...");
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
@@ -120,8 +117,8 @@ int serverWork()
 			printf("New connection , socket fd is %d , ip is : %s , port : %d \n", new_socket, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
 			//add new socket to array of sockets
-			int full = 1;
-			for (int i = 0; i < max_clients; i++)
+			int i = 0;
+			for (; i < max_clients; i++)
 			{
 				//if position is empty
 				if (client_socket[i] == 0)
@@ -130,13 +127,18 @@ int serverWork()
 					if (new_socket > max_sd) max_sd = new_socket;
 					FD_SET(new_socket, &readfds);
 					printf("Adding to list of sockets as %d\n", i);
-					full = 0;
 					break;
 				}
 			}
-			if (full)
+			if (i == max_clients - 1)
 			{
-				closesocket(new_socket);
+				int max_clientsOld = max_clients;
+				max_clients += 10;
+				client_socket = (int*)realloc(client_socket, max_clients);
+				for (int i = max_clientsOld; i < max_clients; ++i)
+				{
+					client_socket[i] = 0;
+				}
 			}
 		}
 		else
